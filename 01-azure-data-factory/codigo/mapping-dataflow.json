@@ -1,0 +1,163 @@
+{
+    "name": "df_transformation_muertes",
+    "properties": {
+        "type": "MappingDataFlow",
+        "typeProperties": {
+            "sources": [
+                {
+                    "dataset": {
+                        "referenceName": "ds_muertes_raw_dl",
+                        "type": "DatasetReference"
+                    },
+                    "name": "sourceMuertesCsvRaw"
+                },
+                {
+                    "dataset": {
+                        "referenceName": "ds_dimension_fechas",
+                        "type": "DatasetReference"
+                    },
+                    "name": "dimensionFechas"
+                }
+            ],
+            "sinks": [
+                {
+                    "dataset": {
+                        "referenceName": "ds_dataflow_processed",
+                        "type": "DatasetReference"
+                    },
+                    "name": "sinkGeorgia"
+                },
+                {
+                    "dataset": {
+                        "referenceName": "ds_dataflow_parquet",
+                        "type": "DatasetReference"
+                    },
+                    "name": "sinkRestParquet"
+                }
+            ],
+            "transformations": [
+                {
+                    "name": "filterMuertes"
+                },
+                {
+                    "name": "selectEuroMuertes"
+                },
+                {
+                    "name": "pivotMuertes",
+                    "description": "Permite cambiar los valores de fila en columnas, agrupar columnas y agregar datos. por fila: indicator -> columnas: confirmed cases, deaths"
+                },
+                {
+                    "name": "splitGeorgiaCountry"
+                },
+                {
+                    "name": "derivedColumnFechas"
+                },
+                {
+                    "name": "joinMuertesFechas"
+                },
+                {
+                    "name": "sortgeogiacases"
+                }
+            ],
+            "scriptLines": [
+                "source(output(",
+                "          country as string,",
+                "          country_code as string,",
+                "          continent as string,",
+                "          population as integer,",
+                "          indicator as string,",
+                "          daily_count as short,",
+                "          date as string,",
+                "          rate_14_day as double,",
+                "          source as string",
+                "     ),",
+                "     allowSchemaDrift: true,",
+                "     validateSchema: false,",
+                "     inferDriftedColumnTypes: true,",
+                "     limit: 1000,",
+                "     ignoreNoFilesFound: false) ~> sourceMuertesCsvRaw",
+                "source(output(",
+                "          fecha_id as date,",
+                "          fecha as string,",
+                "          year as string,",
+                "          mes as string,",
+                "          dia as string,",
+                "          year_mes as integer,",
+                "          year_semana as integer",
+                "     ),",
+                "     allowSchemaDrift: true,",
+                "     validateSchema: false,",
+                "     limit: 1000,",
+                "     ignoreNoFilesFound: false) ~> dimensionFechas",
+                "sourceMuertesCsvRaw filter(continent == 'Europe' && not(isNull(country_code))) ~> filterMuertes",
+                "filterMuertes select(mapColumn(",
+                "          country,",
+                "          country_code,",
+                "          population,",
+                "          indicator,",
+                "          daily_count,",
+                "          date_process = date,",
+                "          source",
+                "     ),",
+                "     skipDuplicateMapInputs: true,",
+                "     skipDuplicateMapOutputs: true) ~> selectEuroMuertes",
+                "selectEuroMuertes pivot(groupBy(country,",
+                "          country_code,",
+                "          population,",
+                "          daily_count,",
+                "          date_process,",
+                "          source),",
+                "     pivotBy(indicator, ['confirmed cases', 'deaths']),",
+                "     count = sum(daily_count),",
+                "     columnNaming: '$N_$V',",
+                "     lateral: true) ~> pivotMuertes",
+                "pivotMuertes split(country == 'Georgia' || country_code == 'GEO',",
+                "     disjoint: false) ~> splitGeorgiaCountry@(GeorgiaCountry, RestCountries)",
+                "dimensionFechas derive(yearmesdia = year + '-' + '0' + mes + '-' + dia) ~> derivedColumnFechas",
+                "splitGeorgiaCountry@RestCountries, derivedColumnFechas join(date_process == yearmesdia,",
+                "     joinType:'left',",
+                "     matchType:'exact',",
+                "     ignoreSpaces: false,",
+                "     broadcast: 'auto')~> joinMuertesFechas",
+                "splitGeorgiaCountry@GeorgiaCountry sort(desc({count_confirmed cases}, false)) ~> sortgeogiacases",
+                "sortgeogiacases sink(allowSchemaDrift: true,",
+                "     validateSchema: false,",
+                "     partitionFileNames:['dataflow_georgia'],",
+                "     umask: 0022,",
+                "     preCommands: [],",
+                "     postCommands: [],",
+                "     skipDuplicateMapInputs: true,",
+                "     skipDuplicateMapOutputs: true,",
+                "     partitionBy('hash', 1)) ~> sinkGeorgia",
+                "joinMuertesFechas sink(allowSchemaDrift: true,",
+                "     validateSchema: false,",
+                "     format: 'parquet',",
+                "     partitionFileNames:['restcountriesparquet'],",
+                "     umask: 0022,",
+                "     preCommands: [],",
+                "     postCommands: [],",
+                "     skipDuplicateMapInputs: true,",
+                "     skipDuplicateMapOutputs: true,",
+                "     mapColumn(",
+                "          country,",
+                "          country_code,",
+                "          population,",
+                "          daily_count,",
+                "          date_process,",
+                "          source,",
+                "          count_confirmed_cases = {count_confirmed cases},",
+                "          count_deaths,",
+                "          fecha_id,",
+                "          fecha,",
+                "          year,",
+                "          mes,",
+                "          dia,",
+                "          year_mes,",
+                "          year_semana,",
+                "          yearmesdia",
+                "     ),",
+                "     partitionBy('hash', 1)) ~> sinkRestParquet"
+            ]
+        }
+    }
+}
