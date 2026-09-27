@@ -7,7 +7,7 @@ Este repositorio contiene mis apuntes, arquitecturas y laboratorios prácticos d
 *   **[Módulo 01: Azure Data Factory (ADF)](./01-azure-data-factory/)** 🚀
     *   Transformación avanzada con Mapping Data Flows.
     *   Optimización de Integration Runtimes y Orquestación automatizada.
-*   **[Módulo 02: Azure Databricks](./02-azure-databricks/)** 🚧 *(Próximamente)*
+*   **[Módulo 02: Azure Databricks](./02-azure-databricks/)** 🚀
     *   Procesamiento Spark con Notebooks, Delta Lake y optimización de clústeres.
 
 ---
