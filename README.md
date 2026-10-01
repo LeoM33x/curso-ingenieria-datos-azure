@@ -9,6 +9,7 @@ Este repositorio contiene mis apuntes, arquitecturas y laboratorios prácticos d
     *   Optimización de Integration Runtimes y Orquestación automatizada.
 *   **[Módulo 02: Azure Databricks](./02-azure-databricks/)** 🚀
     *   Procesamiento Spark con Notebooks, Delta Lake y optimización de clústeres.
+	*   Pipeline Databricks y ADSL - Pyspark
 
 ---
 *Mantenido por [LeoM33x].*
