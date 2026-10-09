@@ -55,3 +55,38 @@ El resultado final analítico fue exportado de vuelta al Data Lake de Azure en f
 ## 💡 Conclusiones del Laboratorio
 *   **Normalización Analítica:** Evaluar impactos en términos porcentuales nivela el terreno de juego, exponiendo la verdadera vulnerabilidad de comunidades pequeñas que el análisis cuantitativo absoluto suele ocultar.
 *   **Arquitectura Medallón:** Pasar datos de formatos planos (`.csv`) a formatos columnares binarios (`.parquet`) en capas refinadas (`processed`) optimiza drásticamente los costos de almacenamiento y los tiempos de cómputo en la nube.
+
+## 🤖 Fase 5: Machine Learning Integrado (Time Series Forecasting con Prophet)
+Para cerrar el ciclo analítico con broche de oro, se incorporó un modelo predictivo de Machine Learning directamente sobre los datos refinados de la capa *processed*. El objetivo fue proyectar a un año (**365 días**) la tendencia de los **casos confirmados diarios de COVID-19 en Colombia**.
+
+### 1. Desafíos Técnicos de Entornos Restringidos (Databricks Free Edition)
+Debido a las restricciones de la suscripción *student*, se utilizó **Databricks Community Edition**. Esto planteó dos retos de ingeniería que se resolvieron mediante patrones de código limpio:
+* **Aislamiento de Contexto (Spark vs Pandas):** El modelo **Prophet** requiere DataFrames de Pandas de forma nativa. Se ejecutó una conversión controlada en memoria (`.toPandas()`) aprovechando que la muestra de datos ya estaba filtrada y optimizada para un solo país.
+* **Seguridad y Escritura Efímera:** Para evitar bloqueos de políticas globales en el clúster gratuito (`[CONFIG_NOT_AVAILABLE]`), se replicó el patrón de **autenticación por opciones efímeras (`.option()`)** con el *Service Principal* de Azure directamente en el método de escritura de Spark.
+
+```python
+# Muestra del patrón de escritura efímera utilizado para salvar las restricciones del clúster
+df_forecast_final.write \
+    .option("fs.azure.account.auth.type", "OAuth") \
+    .option("fs.azure.account.oauth.provider.type", "org.apache.hadoop.fs.azurebfs.oauth2.ClientCredsTokenProvider") \
+    .option("fs.azure.account.oauth2.client.id", client_id) \
+    .option("fs.azure.account.oauth2.client.secret", client_secret) \
+    .option("fs.azure.account.oauth2.client.endpoint", f"https://microsoftonline.com{tenant_id}/oauth2/token") \
+    .mode("overwrite") \
+    .parquet(ruta_destino_ml)
+```
+
+### 2. Resultados e Insights del Modelo
+El modelo identificó con éxito las estacionalidades semanales y anuales del comportamiento del virus. Los resultados finales incluyen el valor predicho (`prediccion_casos`) junto con sus intervalos de confianza superior e inferior.
+
+<p align="center">
+  <img src="./assets/prophet_forecast_colombia.png" alt="Predicción a 1 Año - Prophet Databricks" width="85%">
+</p>
+
+![Grafico de Componentes](assets/prophet_forecast_colombia_ext.png)
+
+*Los gráficos de componentes generados demuestran cómo el modelo aísla la tendencia general de los picos estacionales de los fines de semana.*
+
+### 3. Persistencia de Predicciones en el Data Lake
+Los resultados predictivos no se quedaron aislados en el Notebook. Se transformaron de vuelta a un Spark DataFrame distribuido, se estandarizaron los nombres de las columnas bajo buenas prácticas analíticas y se almacenaron en el ADLS Gen2 en formato **Parquet** dentro de la ruta:
+`covid_analytics/forecast_cases_colombia/`
